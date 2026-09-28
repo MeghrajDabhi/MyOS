@@ -19,14 +19,21 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y live-build debootstrap squashfs-tools xorriso
+          sudo apt-get install -y live-build debootstrap squashfs-tools xorriso curl
 
       - name: Build Minimal Live System
         run: |
           mkdir build && cd build
-          lb config --architectures amd64 --bootloader grub-efi --archive-areas "main universe multiverse"
           
-          # Add minimal desktop + Firefox + Bluetooth + Waydroid
+          # Force distribution to modern Ubuntu 22.04 Jammy
+          lb config \
+            --mode ubuntu \
+            --distribution jammy \
+            --architectures amd64 \
+            --bootloader grub-efi \
+            --archive-areas "main universe multiverse"
+          
+          # Package list for your minimal desktop
           cat << 'EOF' > config/package-lists/my-packages.list.chroot
           xorg
           openbox
@@ -34,10 +41,20 @@ jobs:
           firefox
           bluez
           blueman
-          waydroid
           curl
+          ca-certificates
           EOF
           
+          # Install Waydroid during live build
+          mkdir -p config/hooks/live
+          cat << 'EOF' > config/hooks/live/0100-install-waydroid.hook.chroot
+          #!/bin/sh
+          curl -s https://repo.waydro.id | bash
+          apt-get update
+          apt-get install -y waydroid
+          EOF
+          chmod +x config/hooks/live/0100-install-waydroid.hook.chroot
+
           sudo lb build
 
       - name: Upload ISO Artifact
