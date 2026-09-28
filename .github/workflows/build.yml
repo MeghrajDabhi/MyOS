@@ -1,135 +1,61 @@
-name: Build Minimal Firefox Internet OS
+name: Build MeghrajOS
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-iso:
+  build:
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
+
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v6
 
-      - name: Update system and install archiso
+      - name: Install build tools
         run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm archiso
+          sudo apt update
+          sudo apt install -y \
+            live-build \
+            debootstrap \
+            squashfs-tools \
+            xorriso \
+            grub-pc-bin \
+            grub-efi-amd64-bin \
+            mtools \
+            dosfstools
 
-      - name: Create build directory structure
+      - name: Configure MeghrajOS
         run: |
-          mkdir -p /tmp/archiso-build
-          cp -r /usr/share/archiso/configs/releng /tmp/archiso-build/firefox-os
+          lb config \
+            --distribution trixie \
+            --architectures amd64 \
+            --binary-images iso-hybrid \
+            --archive-areas "main contrib non-free non-free-firmware"
 
-      - name: Configure packages list
-        run: |
-          cat > /tmp/archiso-build/firefox-os/packages.x86_64 << 'EOF'
-          # Core system
-          linux
-          linux-firmware
-          linux-headers
-          base
-          base-devel
-          
-          # Network and internet
-          dhcpcd
-          networkmanager
-          openssh
-          curl
-          wget
-          
-          # Display server and minimal WM
-          xorg-server
-          xorg-xinit
-          xorg-xrandr
-          openbox
-          
-          # Firefox browser
-          firefox
-          
-          # Sound
-          pulseaudio
-          alsa-utils
-          
-          # Utilities
-          vim
+          mkdir -p config/package-lists
+
+          cat > config/package-lists/meghraj.list.chroot << 'EOF'
+          linux-image-amd64
+          systemd-sysv
+          bash
+          sudo
           nano
-          htop
-          git
-          
-          # Lightweight login manager
-          lightdm
-          lightdm-gtk-greeter
+          network-manager
+          bluez
+          rfkill
+          firefox-esr
+          xserver-xorg
+          xinit
+          openbox
+          xterm
           EOF
-
-      - name: Configure pacman for rootfs
-        run: |
-          cat > /tmp/archiso-build/firefox-os/pacman.conf << 'EOF'
-          [options]
-          HoldPkg     = pacman glibc
-          Architecture = auto
-          Color
-          CheckSpace
-          LogFile     = /var/log/pacman.log
-          CacheDir    = /var/cache/pacman/pkg/
-          GPGDir      = /etc/pacman.d/gnupg/
-
-          [core]
-          Include = /etc/pacman.d/mirrorlist
-
-          [extra]
-          Include = /etc/pacman.d/mirrorlist
-
-          [multilib]
-          Include = /etc/pacman.d/mirrorlist
-          EOF
-
-      - name: Configure profile for Firefox auto-launch
-        run: |
-          mkdir -p /tmp/archiso-build/firefox-os/airootfs/etc/skel
-          mkdir -p /tmp/archiso-build/firefox-os/airootfs/root
-          
-          cat > /tmp/archiso-build/firefox-os/airootfs/etc/skel/.xinitrc << 'EOF'
-          #!/bin/bash
-          exec openbox &
-          exec firefox &
-          wait
-          EOF
-          
-          chmod +x /tmp/archiso-build/firefox-os/airootfs/etc/skel/.xinitrc
-          cp /tmp/archiso-build/firefox-os/airootfs/etc/skel/.xinitrc /tmp/archiso-build/firefox-os/airootfs/root/
-
-      - name: Configure LightDM to auto-start Firefox
-        run: |
-          mkdir -p /tmp/archiso-build/firefox-os/airootfs/usr/share/xsessions
-          
-          cat > /tmp/archiso-build/firefox-os/airootfs/usr/share/xsessions/firefox.desktop << 'EOF'
-          [Desktop Entry]
-          Name=Firefox
-          Comment=Firefox Internet Browser
-          Exec=firefox
-          Type=Application
-          EOF
-
-      - name: Set build output directory
-        run: |
-          mkdir -p /tmp/archiso-build/firefox-os/out
 
       - name: Build ISO
         run: |
-          cd /tmp/archiso-build/firefox-os
-          mkarchiso -v -w /tmp/archiso-work -o ./out .
+          lb build
 
-      - name: Prepare artifacts
-        run: |
-          mkdir -p /tmp/artifacts
-          cp /tmp/archiso-build/firefox-os/out/*.iso /tmp/artifacts/ 2>/dev/null || echo "ISO not found in expected location"
-          ls -lah /tmp/archiso-build/firefox-os/out/ || echo "Output directory not found"
-
-      - name: Upload ISO Artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload ISO
+        uses: actions/upload-artifact@v6
         with:
-          name: Firefox-Minimal-Internet-OS-ISO
-          path: /tmp/artifacts/
-          if-no-files-found: warn
+          name: MeghrajOS
+          path: "*.iso"
