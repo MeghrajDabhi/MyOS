@@ -10,14 +10,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    container:
+      image: debian:trixie
+      options: --privileged --security-opt seccomp=unconfined
+
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@v6
 
-      - name: Install build tools
+      - name: Install Debian Live build tools
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y \
             live-build \
             debootstrap \
             debian-archive-keyring \
@@ -26,16 +34,24 @@ jobs:
             grub-pc-bin \
             grub-efi-amd64-bin \
             mtools \
-            dosfstools
+            dosfstools \
+            ca-certificates
 
-      - name: Prepare clean Live-build configuration
+      - name: Show build environment
         run: |
-          sudo rm -rf config
-          sudo rm -rf .build
-          sudo rm -rf chroot
-          sudo rm -rf binary
-          sudo rm -rf cache
-          sudo rm -rf tftpboot
+          echo "Debian:"
+          cat /etc/debian_version
+          echo "live-build:"
+          lb --version
+
+      - name: Clean old configuration
+        run: |
+          rm -rf config
+          rm -rf cache
+          rm -rf chroot
+          rm -rf binary
+          rm -rf installer
+          rm -rf tftpboot
 
       - name: Configure MeghrajOS
         run: |
@@ -46,7 +62,7 @@ jobs:
             --binary-images iso-hybrid \
             --bootloaders "grub-pc grub-efi" \
             --linux-packages "linux-image" \
-            --linux-flavours amd64 \
+            --linux-flavours "amd64" \
             --archive-areas "main contrib non-free non-free-firmware" \
             --mirror-bootstrap "https://deb.debian.org/debian/" \
             --mirror-chroot "https://deb.debian.org/debian/" \
@@ -54,15 +70,15 @@ jobs:
             --mirror-chroot-security "https://security.debian.org/debian-security/" \
             --mirror-binary-security "https://security.debian.org/debian-security/" \
             --debian-installer none \
-            --firmware-chroot true \
-            --firmware-binary true \
             --initramfs live-boot \
             --initsystem systemd \
             --apt-secure true \
             --apt-recommends true \
-            --image-name "MeghrajOS"
+            --image-name "MeghrajOS" \
+            --iso-application "MeghrajOS" \
+            --iso-volume "MEGHRAJOS"
 
-      - name: Create MeghrajOS package list
+      - name: Create package list
         run: |
           mkdir -p config/package-lists
 
@@ -74,6 +90,7 @@ jobs:
           wpasupplicant
           bluez
           rfkill
+          firmware-linux
           firefox-esr
           xserver-xorg
           xinit
@@ -81,11 +98,9 @@ jobs:
           xterm
           EOF
 
-      - name: Create basic OS configuration
+      - name: Set OS identity
         run: |
           mkdir -p config/includes.chroot/etc
-
-          echo "MeghrajOS" | sudo tee config/includes.chroot/etc/hostname
 
           cat > config/includes.chroot/etc/os-release << 'EOF'
           PRETTY_NAME="MeghrajOS"
@@ -94,20 +109,23 @@ jobs:
           ID_LIKE=debian
           VERSION="0.1"
           VERSION_ID="0.1"
-          HOME_URL="https://github.com/MeghrajDabhi/MyOS"
           EOF
+
+          echo "MeghrajOS" > config/includes.chroot/etc/hostname
 
       - name: Build ISO
         run: |
-          sudo lb build
+          lb build
 
-      - name: Find ISO
+      - name: Show generated files
         run: |
           echo "Generated files:"
-          find . -maxdepth 2 -type f \( -name "*.iso" -o -name "*.img" \) -print
+          find . -maxdepth 2 -type f \
+            \( -name "*.iso" -o -name "*.img" \) \
+            -print
 
-      - name: Upload MeghrajOS ISO
-        uses: actions/upload-artifact@v7
+      - name: Upload ISO
+        uses: actions/upload-artifact@v6
         with:
           name: MeghrajOS-ISO
           path: "*.iso"
