@@ -5,60 +5,29 @@ on:
 
 jobs:
   build-iso:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Free Disk Space
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y live-build debootstrap squashfs-tools xorriso curl
-
-      - name: Build Minimal Live System
-        run: |
-          mkdir build && cd build
-          
-          # Force distribution to modern Ubuntu 22.04 Jammy
-          lb config \
-            --mode ubuntu \
-            --distribution jammy \
-            --architectures amd64 \
-            --bootloader grub-efi \
-            --archive-areas "main universe multiverse"
-          
-          # Package list for your minimal desktop
-          cat << 'EOF' > config/package-lists/my-packages.list.chroot
-          xorg
-          openbox
-          lightdm
-          firefox
-          bluez
-          blueman
-          curl
-          ca-certificates
-          EOF
-          
-          # Install Waydroid during live build
-          mkdir -p config/hooks/live
-          cat << 'EOF' > config/hooks/live/0100-install-waydroid.hook.chroot
-          #!/bin/sh
-          curl -s https://repo.waydro.id | bash
-          apt-get update
-          apt-get install -y waydroid
-          EOF
-          chmod +x config/hooks/live/0100-install-waydroid.hook.chroot
-
-          sudo lb build
+      - name: Build Minimal Arch ISO
+        uses: archlinux/archiso-action@v1
+        with:
+          profile: releng
+          custom-packages: >
+            xorg-server
+            openbox
+            lightdm
+            lightdm-gtk-greeter
+            firefox
+            bluez
+            bluez-utils
+            blueman
+            waydroid
+            curl
 
       - name: Upload ISO Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Custom-Minimal-Linux-ISO
-          path: build/*.iso
+          path: output/*.iso
