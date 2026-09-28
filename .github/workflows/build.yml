@@ -3,6 +3,9 @@ name: Build MeghrajOS
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -25,25 +28,45 @@ jobs:
             mtools \
             dosfstools
 
+      - name: Prepare clean Live-build configuration
+        run: |
+          sudo rm -rf config
+          sudo rm -rf .build
+          sudo rm -rf chroot
+          sudo rm -rf binary
+          sudo rm -rf cache
+          sudo rm -rf tftpboot
+
       - name: Configure MeghrajOS
         run: |
           lb config \
+            --mode debian \
             --distribution trixie \
             --architectures amd64 \
             --binary-images iso-hybrid \
+            --bootloaders "grub-pc grub-efi" \
+            --linux-packages "linux-image" \
+            --linux-flavours amd64 \
             --archive-areas "main contrib non-free non-free-firmware" \
             --mirror-bootstrap "https://deb.debian.org/debian/" \
             --mirror-chroot "https://deb.debian.org/debian/" \
             --mirror-binary "https://deb.debian.org/debian/" \
             --mirror-chroot-security "https://security.debian.org/debian-security/" \
             --mirror-binary-security "https://security.debian.org/debian-security/" \
-            --debian-installer none
+            --debian-installer none \
+            --firmware-chroot true \
+            --firmware-binary true \
+            --initramfs live-boot \
+            --initsystem systemd \
+            --apt-secure true \
+            --apt-recommends true \
+            --image-name "MeghrajOS"
 
+      - name: Create MeghrajOS package list
+        run: |
           mkdir -p config/package-lists
 
           cat > config/package-lists/meghraj.list.chroot << 'EOF'
-          linux-image-amd64
-          systemd-sysv
           bash
           sudo
           nano
@@ -51,7 +74,6 @@ jobs:
           wpasupplicant
           bluez
           rfkill
-          firmware-linux
           firefox-esr
           xserver-xorg
           xinit
@@ -59,13 +81,34 @@ jobs:
           xterm
           EOF
 
+      - name: Create basic OS configuration
+        run: |
+          mkdir -p config/includes.chroot/etc
+
+          echo "MeghrajOS" | sudo tee config/includes.chroot/etc/hostname
+
+          cat > config/includes.chroot/etc/os-release << 'EOF'
+          PRETTY_NAME="MeghrajOS"
+          NAME="MeghrajOS"
+          ID=meghrajos
+          ID_LIKE=debian
+          VERSION="0.1"
+          VERSION_ID="0.1"
+          HOME_URL="https://github.com/MeghrajDabhi/MyOS"
+          EOF
+
       - name: Build ISO
         run: |
           sudo lb build
 
-      - name: Upload ISO
+      - name: Find ISO
+        run: |
+          echo "Generated files:"
+          find . -maxdepth 2 -type f \( -name "*.iso" -o -name "*.img" \) -print
+
+      - name: Upload MeghrajOS ISO
         uses: actions/upload-artifact@v7
         with:
-          name: MeghrajOS
+          name: MeghrajOS-ISO
           path: "*.iso"
           if-no-files-found: error
