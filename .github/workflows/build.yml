@@ -52,7 +52,7 @@ jobs:
 
       - name: Build ISO
         run: |
-          lb build
+          sudo lb build
 
       - name: Upload ISO
         uses: actions/upload-artifact@v6
