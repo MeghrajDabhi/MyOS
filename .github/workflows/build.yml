@@ -1,19 +1,47 @@
-name: Build Custom Ubuntu ISO
+name: Build Minimal Custom ISO
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build-iso:
+    runs-on: ubuntu-22.04
     steps:
-      - name: Checkout repository
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Install build tools
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+
+      - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cubic
+          sudo apt-get install -y live-build debootstrap squashfs-tools xorriso
 
-      - name: Ready to Build
-        run: echo "Build environment ready!"
+      - name: Build Minimal Live System
+        run: |
+          mkdir build && cd build
+          lb config --architectures amd64 --bootloader grub-efi --archive-areas "main universe multiverse"
+          
+          # Add minimal desktop + Firefox + Bluetooth + Waydroid
+          cat << 'EOF' > config/package-lists/my-packages.list.chroot
+          xorg
+          openbox
+          lightdm
+          firefox
+          bluez
+          blueman
+          waydroid
+          curl
+          EOF
+          
+          sudo lb build
+
+      - name: Upload ISO Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Custom-Minimal-Linux-ISO
+          path: build/*.iso
