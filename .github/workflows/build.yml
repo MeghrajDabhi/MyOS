@@ -9,14 +9,15 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install build tools
         run: |
-          sudo apt update
-          sudo apt install -y \
+          sudo apt-get update
+          sudo apt-get install -y \
             live-build \
             debootstrap \
+            debian-archive-keyring \
             squashfs-tools \
             xorriso \
             grub-pc-bin \
@@ -30,7 +31,13 @@ jobs:
             --distribution trixie \
             --architectures amd64 \
             --binary-images iso-hybrid \
-            --archive-areas "main contrib non-free non-free-firmware"
+            --archive-areas "main contrib non-free non-free-firmware" \
+            --mirror-bootstrap "https://deb.debian.org/debian/" \
+            --mirror-chroot "https://deb.debian.org/debian/" \
+            --mirror-binary "https://deb.debian.org/debian/" \
+            --mirror-chroot-security "https://security.debian.org/debian-security/" \
+            --mirror-binary-security "https://security.debian.org/debian-security/" \
+            --debian-installer none
 
           mkdir -p config/package-lists
 
@@ -41,8 +48,10 @@ jobs:
           sudo
           nano
           network-manager
+          wpasupplicant
           bluez
           rfkill
+          firmware-linux
           firefox-esr
           xserver-xorg
           xinit
@@ -55,7 +64,8 @@ jobs:
           sudo lb build
 
       - name: Upload ISO
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: MeghrajOS
           path: "*.iso"
+          if-no-files-found: error
